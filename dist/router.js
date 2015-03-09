@@ -43,19 +43,38 @@ define(["assert", 'route-recognizer'], function($__0,$__2) {
       return this.renavigate();
     },
     configOne: function(mapping) {
+      var $__4 = this;
       if (mapping.redirectTo) {
         this.rewrites[mapping.path] = mapping.redirectTo;
         return;
       }
-      var component = mapping.component;
-      if (typeof component === 'string') {
-        mapping.handler = {component: component};
-      } else if (typeof component === 'function') {
-        mapping.handler = component();
-      } else if (!mapping.handler) {
-        mapping.handler = {component: component};
+      if (mapping.component) {
+        if (mapping.components) {
+          throw new Error('A route config should have either a "component" or "components" property, but not both.');
+        }
+        mapping.components = mapping.component;
+        delete mapping.component;
       }
-      this.recognizer.add([mapping], {as: component});
+      if (typeof mapping.components === 'string') {
+        mapping.components = {default: mapping.components};
+      }
+      var aliases;
+      if (mapping.as) {
+        aliases = [mapping.as];
+      } else {
+        aliases = mapObj(mapping.components, (function(componentName, viewportName) {
+          return viewportName + ':' + componentName;
+        }));
+        if (mapping.components.default) {
+          aliases.push(mapping.components.default);
+        }
+      }
+      aliases.forEach((function(alias) {
+        return $__4.recognizer.add([{
+          path: mapping.path,
+          handler: mapping
+        }], {as: alias});
+      }));
       var withChild = copy(mapping);
       withChild.path += CHILD_ROUTE_SUFFIX;
       this.recognizer.add([{
@@ -65,16 +84,13 @@ define(["assert", 'route-recognizer'], function($__0,$__2) {
     },
     navigate: function(url) {
       var $__4 = this;
-      if (url[0] === '.') {
-        url = url.substr(1);
-      }
       var self = this;
       if (this.navigating) {
         return Promise.resolve();
       }
       url = this.getCanonicalUrl(url);
       this.lastNavigationAttempt = url;
-      var context = this.recognizer.recognize(url);
+      var context = this.recognize(url);
       var segment = url;
       if (notMatched(context)) {
         return Promise.resolve();
@@ -94,7 +110,6 @@ define(["assert", 'route-recognizer'], function($__0,$__2) {
       this.context = context[0];
       this.fullContext = context;
       this.navigating = true;
-      context.component = this.context.handler.component;
       return this.canNavigate(context).then((function(status) {
         return (status && $__4.activatePorts(context));
       })).then(finishNavigating, cancelNavigating);
@@ -114,7 +129,14 @@ define(["assert", 'route-recognizer'], function($__0,$__2) {
         self.navigating = false;
       }
     },
+    recognize: function(url) {
+      url = this.getCanonicalUrl(url);
+      return this.recognizer.recognize(url);
+    },
     getCanonicalUrl: function(url) {
+      if (url[0] === '.') {
+        url = url.substr(1);
+      }
       forEach(this.rewrites, function(toUrl, fromUrl) {
         if (fromUrl === '/') {
           if (url === '/') {
@@ -206,7 +228,9 @@ define(["assert", 'route-recognizer'], function($__0,$__2) {
       return Promise.all(allViewportQueries).then(booleanReduction).then(boolToPromise);
     }
   }, {});
-  Router.prototype.generate.parameters = [[$traceurRuntime.type.string], []];
+  Object.defineProperty(Router.prototype.generate, "parameters", {get: function() {
+      return [[$traceurRuntime.type.string], []];
+    }});
   function copy(obj) {
     return JSON.parse(JSON.stringify(obj));
   }
@@ -240,3 +264,5 @@ define(["assert", 'route-recognizer'], function($__0,$__2) {
     __esModule: true
   };
 });
+
+//# sourceMappingURL=router.ats

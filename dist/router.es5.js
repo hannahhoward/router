@@ -8,7 +8,8 @@ angular.module('ngNewRouter', ['ngNewRouter.generated']).
   provider('$componentLoader', $componentLoaderProvider).
   directive('ngViewport', ngViewportDirective).
   directive('ngViewport', ngViewportFillContentDirective).
-  directive('ngLink', ngLinkDirective);
+  directive('ngLink', ngLinkDirective).
+  directive('a', anchorLinkDirective);
 
 
 
@@ -86,10 +87,8 @@ function ngViewportDirective($animate, $compile, $controller, $templateRequest, 
       }
     }
 
-    function getComponentFromInstruction(instruction) {
-      var component = instruction[0].handler.component;
-      var componentName = typeof component === 'string' ? component : component[viewportName];
-      return $componentLoader(componentName);
+    function getComponentName(instruction) {
+      return instruction[0].handler.components[viewportName];
     }
     router.registerViewport({
       canDeactivate: function (instruction) {
@@ -100,9 +99,8 @@ function ngViewportDirective($animate, $compile, $controller, $templateRequest, 
         return JSON.stringify(instruction) === previousInstruction;
       },
       instantiate: function (instruction) {
-        var controllerName = getComponentFromInstruction(instruction).controllerName;
-        var component = instruction[0].handler.component;
-        var componentName = typeof component === 'string' ? component : component[viewportName];
+        var componentName = getComponentName(instruction);
+        var controllerName = $componentLoader(componentName).controllerName;
 
         // build up locals for controller
         newScope = scope.$new();
@@ -127,14 +125,25 @@ function ngViewportDirective($animate, $compile, $controller, $templateRequest, 
         return !ctrl || !ctrl.canActivate || ctrl.canActivate(instruction);
       },
       load: function (instruction) {
-        var componentTemplateUrl = getComponentFromInstruction(instruction).template;
-        return $templateRequest(componentTemplateUrl).then(function(templateHtml) {
+        var componentTemplateUrl, $template;
+        if (ctrl.constructor.$template) {
+          $template = ctrl.constructor.$template
+          if ($template.inline) {
+            myCtrl.$$template = $template.inline;
+            return;
+          } else {
+            componentTemplateUrl = $template.url;
+          }
+        } else {
+          componentTemplateUrl = $componentLoader(getComponentName(instruction)).template;
+        }
+        $templateRequest(componentTemplateUrl).then(function(templateHtml) {
           myCtrl.$$template = templateHtml;
         });
+        return
       },
       activate: function (instruction) {
-        var component = instruction[0].handler.component;
-        var componentName = typeof component === 'string' ? component : component[viewportName];
+        var componentName = getComponentName(instruction);
 
         var clone = $transclude(newScope, function(clone) {
           $animate.enter(clone, null, currentElement || $element);
@@ -206,15 +215,6 @@ var LINK_MICROSYNTAX_RE = /^(.+?)(?:\((.*)\))?$/;
 function ngLinkDirective($router, $location, $parse) {
   var rootRouter = $router;
 
-  angular.element(document.body).on('click', function (ev) {
-    var target = ev.target;
-    if (target.attributes['ng-link']) {
-      ev.preventDefault();
-      var url = target.attributes.href.value;
-      rootRouter.navigate(url);
-    }
-  });
-
   return {
     require: '?^^ngViewport',
     restrict: 'A',
@@ -256,6 +256,32 @@ function ngLinkDirective($router, $location, $parse) {
 }
 ngLinkDirective.$inject = ["$router", "$location", "$parse"];
 
+
+function anchorLinkDirective($router) {
+  return {
+    restrict: 'E',
+    link: function(scope, element) {
+      // If the linked element is not an anchor tag anymore, do nothing
+      if (element[0].nodeName.toLowerCase() !== 'a') return;
+
+      // SVGAElement does not use the href attribute, but rather the 'xlinkHref' attribute.
+      var hrefAttrName = toString.call(element.prop('href')) === '[object SVGAnimatedString]' ?
+                     'xlink:href' : 'href';
+
+      element.on('click', function(event) {
+        var href = element.attr(hrefAttrName);
+        if (!href) {
+          event.preventDefault();
+        }
+        if ($router.recognize(href)) {
+          $router.navigate(href);
+          event.preventDefault();
+        }
+      });
+    }
+  }
+}
+anchorLinkDirective.$inject = ["$router"];
 
 /**
  * @name $componentLoaderProvider
@@ -940,19 +966,38 @@ function getDescriptors(object) {
       return this.renavigate();
     },
     configOne: function(mapping) {
+      var $__0 = this;
       if (mapping.redirectTo) {
         this.rewrites[mapping.path] = mapping.redirectTo;
         return;
       }
-      var component = mapping.component;
-      if (typeof component === 'string') {
-        mapping.handler = {component: component};
-      } else if (typeof component === 'function') {
-        mapping.handler = component();
-      } else if (!mapping.handler) {
-        mapping.handler = {component: component};
+      if (mapping.component) {
+        if (mapping.components) {
+          throw new Error('A route config should have either a "component" or "components" property, but not both.');
+        }
+        mapping.components = mapping.component;
+        delete mapping.component;
       }
-      this.recognizer.add([mapping], {as: component});
+      if (typeof mapping.components === 'string') {
+        mapping.components = {default: mapping.components};
+      }
+      var aliases;
+      if (mapping.as) {
+        aliases = [mapping.as];
+      } else {
+        aliases = mapObj(mapping.components, (function(componentName, viewportName) {
+          return viewportName + ':' + componentName;
+        }));
+        if (mapping.components.default) {
+          aliases.push(mapping.components.default);
+        }
+      }
+      aliases.forEach((function(alias) {
+        return $__0.recognizer.add([{
+          path: mapping.path,
+          handler: mapping
+        }], {as: alias});
+      }));
       var withChild = copy(mapping);
       withChild.path += CHILD_ROUTE_SUFFIX;
       this.recognizer.add([{
@@ -962,16 +1007,13 @@ function getDescriptors(object) {
     },
     navigate: function(url) {
       var $__0 = this;
-      if (url[0] === '.') {
-        url = url.substr(1);
-      }
       var self = this;
       if (this.navigating) {
         return $q.when();
       }
       url = this.getCanonicalUrl(url);
       this.lastNavigationAttempt = url;
-      var context = this.recognizer.recognize(url);
+      var context = this.recognize(url);
       var segment = url;
       if (notMatched(context)) {
         return $q.when();
@@ -991,7 +1033,6 @@ function getDescriptors(object) {
       this.context = context[0];
       this.fullContext = context;
       this.navigating = true;
-      context.component = this.context.handler.component;
       return this.canNavigate(context).then((function(status) {
         return (status && $__0.activatePorts(context));
       })).then(finishNavigating, cancelNavigating);
@@ -1011,7 +1052,14 @@ function getDescriptors(object) {
         self.navigating = false;
       }
     },
+    recognize: function(url) {
+      url = this.getCanonicalUrl(url);
+      return this.recognizer.recognize(url);
+    },
     getCanonicalUrl: function(url) {
+      if (url[0] === '.') {
+        url = url.substr(1);
+      }
       forEach(this.rewrites, function(toUrl, fromUrl) {
         if (fromUrl === '/') {
           if (url === '/') {

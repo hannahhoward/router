@@ -26,10 +26,10 @@ describe('ngViewport', function () {
     });
 
     put('one', '<div>{{number}}</div>');
-    $controllerProvider.register('OneController', boringController('number', 'one'));
+    $controllerProvider.register('OneController', boringController('number', 'one', 'one'));
 
     put('two', '<div>{{number}}</div>');
-    $controllerProvider.register('TwoController', boringController('number', 'two'));
+    $controllerProvider.register('TwoController', boringController('number', 'two', 'two'));
   });
 
 
@@ -273,6 +273,38 @@ describe('ngViewport', function () {
     expect(elt.text()).toBe('hi');
   }));
 
+  it('should load a seperate template when a controller has a $template property', inject(function ($router) {
+    $templateCache.put('NonStandardDirectory/aNonStandardName.html', [200, 'hi', {}]);
+    $controllerProvider.register('TemplateController', TemplateController);
+    function TemplateController() {}
+    TemplateController.$template = {
+      url: 'NonStandardDirectory/aNonStandardName.html'
+    }
+    $router.config([
+      { path: '/t', component: 'template' }
+    ]);
+    compile('<div ng-viewport></div>');
+
+    $router.navigate('/t');
+    $rootScope.$digest();
+    expect(elt.text()).toBe('hi');
+  }));
+
+  it('should load a seperate template when a controller has a $template property', inject(function ($router) {
+    $controllerProvider.register('InlineTemplateController', InlineTemplateController);
+    function InlineTemplateController() {}
+    InlineTemplateController.$template = {
+      inline: 'hi'
+    }
+    $router.config([
+      { path: '/t', component: 'inlineTemplate' }
+    ]);
+    compile('<div ng-viewport></div>');
+
+    $router.navigate('/t');
+    $rootScope.$digest();
+    expect(elt.text()).toBe('hi');
+  }));
 
   it('should change location path', inject(function ($router, $location) {
 
