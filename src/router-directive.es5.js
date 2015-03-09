@@ -125,10 +125,22 @@ function ngViewportDirective($animate, $compile, $controller, $templateRequest, 
         return !ctrl || !ctrl.canActivate || ctrl.canActivate(instruction);
       },
       load: function (instruction) {
-        var componentTemplateUrl = $componentLoader(getComponentName(instruction)).template;
-        return $templateRequest(componentTemplateUrl).then(function(templateHtml) {
+        var componentTemplateUrl, $template;
+        if (ctrl.constructor.$template) {
+          $template = ctrl.constructor.$template
+          if ($template.inline) {
+            myCtrl.$$template = $template.inline;
+            return;
+          } else {
+            componentTemplateUrl = $template.url;
+          }
+        } else {
+          componentTemplateUrl = $componentLoader(getComponentName(instruction)).template;
+        }
+        $templateRequest(componentTemplateUrl).then(function(templateHtml) {
           myCtrl.$$template = templateHtml;
         });
+        return;
       },
       activate: function (instruction) {
         var componentName = getComponentName(instruction);
