@@ -26,10 +26,10 @@ describe('ngViewport', function () {
     });
 
     put('one', '<div>{{number}}</div>');
-    $controllerProvider.register('OneController', boringController('number', 'one', 'one'));
+    $controllerProvider.register('OneController', boringController('number', 'one'));
 
     put('two', '<div>{{number}}</div>');
-    $controllerProvider.register('TwoController', boringController('number', 'two', 'two'));
+    $controllerProvider.register('TwoController', boringController('number', 'two'));
   });
 
 
