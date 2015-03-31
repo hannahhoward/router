@@ -29,7 +29,9 @@ angular.module('ngNewRouter', [])
  */
 angular.module('ng')
   .provider('$controllerIntrospector', $controllerIntrospectorProvider)
-  .config(controllerProviderDecorator);
+  .provider('$compileIntrospector', $compileIntrospectorProvider)
+  .config(controllerProviderDecorator)
+  .config(compileProviderDecorator);
 
 /*
  * decorates with routing info
@@ -42,6 +44,15 @@ function controllerProviderDecorator($controllerProvider, $controllerIntrospecto
   };
 }
 controllerProviderDecorator.$inject = ["$controllerProvider", "$controllerIntrospectorProvider"];
+
+function compileProviderDecorator($compileProvider, $compileIntrospectorProvider) {
+  var directive = $compileProvider.directive;
+  $compileProvider.directive = function (name, directiveFactory) {
+    $compileIntrospectorProvider.directive(name, directiveFactory);
+    return directive.apply(this, arguments);
+  };
+}
+compileProviderDecorator.$inject = ["$compileProvider", "$compileIntrospectorProvider"];
 
 /*
  * private service that holds route mappings for each controller
@@ -77,9 +88,47 @@ function $controllerIntrospectorProvider() {
   }
 }
 
-function routerFactory($$rootRouter, $rootScope, $location, $$grammar, $controllerIntrospector) {
+
+/*
+ * private service that holds route mappings for each controller
+ */
+function $compileIntrospectorProvider() {
+  var directiveFactories = [];
+  var onDirectiveDefined = null;
+  return {
+    directive: function (name, directiveFactory) {
+      if (angular.isArray(directiveFactory)) {
+        directiveFactory = directiveFactory[directiveFactory.length - 1];
+      }
+      if (directiveFactory.$routeConfig) {
+        if (onDirectiveDefined) {
+          onDirectiveDefined(name, directiveFactory.$routeConfig);
+        } else {
+          directiveFactories.push({name: name, config: directiveFactory.$routeConfig});
+        }
+      }
+    },
+    $get: ['$componentLoader', '$injector', function ($componentLoader, $injector) {
+      return function (newOnDirectiveDefined) {
+        onDirectiveDefined = function (name, config) {
+          return newOnDirectiveDefined(name, config);
+        };
+        while(directiveFactories.length > 0) {
+          var rule = directiveFactories.pop();
+          onDirectiveDefined(rule.name, rule.config);
+        }
+      }
+    }]
+  }
+}
+
+function routerFactory($$rootRouter, $rootScope, $location, $$grammar, $controllerIntrospector, $compileIntrospector) {
 
   $controllerIntrospector(function (name, config) {
+    $$grammar.config(name, config);
+  });
+
+  $compileIntrospector(function (name, config) {
     $$grammar.config(name, config);
   });
 
@@ -100,7 +149,7 @@ function routerFactory($$rootRouter, $rootScope, $location, $$grammar, $controll
 
   return $$rootRouter;
 }
-routerFactory.$inject = ["$$rootRouter", "$rootScope", "$location", "$$grammar", "$controllerIntrospector"];
+routerFactory.$inject = ["$$rootRouter", "$rootScope", "$location", "$$grammar", "$controllerIntrospector", "$compileIntrospector"];
 
 /**
  * @name ngViewport
