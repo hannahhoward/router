@@ -7,11 +7,21 @@ angular.module('ngNewRouter', [])
   .factory('$router', routerFactory)
   .value('$routeParams', {})
   .provider('$componentLoader', $componentLoaderProvider)
-  .factory('$$pipeline', pipelineFactory)
+  .provider('$pipeline', pipelineProvider)
+  .factory('$$pipeline', privatePipelineFactory)
+  .factory('$setupRoutersStep', setupRoutersStepFactory)
+  .factory('$initLocalsStep', initLocalsStepFactory)
+  .factory('$initControllersStep', initControllersStepFactory)
+  .factory('$runCanDeactivateHookStep', runCanDeactivateHookStepFactory)
+  .factory('$runCanActivateHookStep', runCanActivateHookStepFactory)
+  .factory('$loadTemplatesStep', loadTemplatesStepFactory)
+  .value('$activateStep', activateStepValue)
   .directive('ngViewport', ngViewportDirective)
   .directive('ngViewport', ngViewportFillContentDirective)
   .directive('ngLink', ngLinkDirective)
-  .directive('a', anchorLinkDirective);
+  .directive('a', anchorLinkDirective)
+
+
 
 
 /*
@@ -104,7 +114,7 @@ function routerFactory($$rootRouter, $rootScope, $location, $$grammar, $controll
  *
  * The value for the `ngViewport` attribute is optional.
  */
-function ngViewportDirective($animate, $compile, $controller, $templateRequest, $rootScope, $location, $componentLoader, $router) {
+function ngViewportDirective($animate, $injector, $q, $router) {
   var rootRouter = $router;
 
   return {
@@ -117,6 +127,10 @@ function ngViewportDirective($animate, $compile, $controller, $templateRequest, 
     controller: function() {},
     controllerAs: '$$ngViewport'
   };
+
+  function invoke(method, context, instruction) {
+    return $injector.invoke(method, context, instruction.locals);
+  }
 
   function viewportLink(scope, $element, attrs, ctrls, $transclude) {
     var viewportName = attrs.ngViewport || 'default',
@@ -151,19 +165,19 @@ function ngViewportDirective($animate, $compile, $controller, $templateRequest, 
     }
 
     router.registerViewport({
-      canDeactivate: function (instruction) {
+      canDeactivate: function(instruction) {
         if (currentController && currentController.canDeactivate) {
-          return currentController.canDeactivate();
+          return invoke(currentController.canDeactivate, currentController, instruction);
         }
         return true;
       },
-      activate: function (instruction) {
+      activate: function(instruction) {
         var nextInstruction = serializeInstruction(instruction);
         if (nextInstruction === previousInstruction) {
           return;
         }
 
-        newScope = scope.$new();
+        instruction.locals.$scope = newScope = scope.$new();
         myCtrl.$$router = instruction.router;
         myCtrl.$$template = instruction.template;
         var componentName = instruction.component;
@@ -172,9 +186,15 @@ function ngViewportDirective($animate, $compile, $controller, $templateRequest, 
           cleanupLastView();
         });
 
-        var ctrl = instruction.controller;
-        newScope[componentName] = ctrl;
-        currentController = ctrl;
+        var newController = instruction.controller;
+        newScope[componentName] = newController;
+
+        var result;
+        if (currentController && currentController.deactivate) {
+          result = $q.when(invoke(currentController.deactivate, currentController, instruction));
+        }
+
+        currentController = newController;
 
         currentElement = clone;
         currentScope = newScope;
@@ -182,9 +202,15 @@ function ngViewportDirective($animate, $compile, $controller, $templateRequest, 
         previousInstruction = nextInstruction;
 
         // finally, run the hook
-        if (ctrl.activate) {
-          ctrl.activate(instruction);
+        if (newController.activate) {
+          var activationResult = $q.when(invoke(newController.activate, newController, instruction));
+          if (result) {
+            return result.then(activationResult);
+          } else {
+            return activationResult;
+          }
         }
+        return result;
       }
     }, viewportName);
   }
@@ -236,8 +262,8 @@ var LINK_MICROSYNTAX_RE = /^(.+?)(?:\((.*)\))?$/;
  *
  * ```js
  * angular.module('myApp', ['ngFuturisticRouter'])
- *   .controller('AppController', ['router', function(router) {
- *     router.config({ path: '/user/:id' component: 'user' });
+ *   .controller('AppController', ['$router', function($router) {
+ *     $router.config({ path: '/user/:id' component: 'user' });
  *     this.user = { name: 'Brian', id: 123 };
  *   });
  * ```
@@ -300,7 +326,7 @@ function anchorLinkDirective($router) {
       if (element[0].nodeName.toLowerCase() !== 'a') return;
 
       // SVGAElement does not use the href attribute, but rather the 'xlinkHref' attribute.
-      var hrefAttrName = toString.call(element.prop('href')) === '[object SVGAnimatedString]' ?
+      var hrefAttrName = Object.prototype.toString.call(element.prop('href')) === '[object SVGAnimatedString]' ?
                      'xlink:href' : 'href';
 
       element.on('click', function(event) {
@@ -317,30 +343,127 @@ function anchorLinkDirective($router) {
   }
 }
 
-function pipelineFactory($controller, $componentLoader, $templateRequest) {
-  return {
-    init: function(instruction) {
-      var controllerName = $componentLoader.controllerName(instruction.component);
+function setupRoutersStepFactory() {
+  return function (instruction) {
+    return instruction.router.makeDescendantRouters(instruction);
+  }
+}
 
-      var locals = {
+/*
+ * $initLocalsStep
+ */
+function initLocalsStepFactory() {
+  return function initLocals(instruction) {
+    return instruction.router.traverseInstruction(instruction, function(instruction) {
+      return instruction.locals = {
         $router: instruction.router,
-        $routeParams: instruction.params || {}
+        $routeParams: (instruction.params || {})
       };
+    });
+  }
+}
+
+/*
+ * $initControllersStep
+ */
+function initControllersStepFactory($controller, $componentLoader) {
+  return function initControllers(instruction) {
+    return instruction.router.traverseInstruction(instruction, function(instruction) {
+      var controllerName = $componentLoader.controllerName(instruction.component);
+      var locals = instruction.locals;
       var ctrl;
       try {
         ctrl = $controller(controllerName, locals);
-      } catch (e) {
+      } catch(e) {
         console.warn && console.warn('Could not instantiate controller', controllerName);
         ctrl = $controller(angular.noop, locals);
       }
-      return ctrl;
-    },
-    load: function (instruction) {
+      return instruction.controller = ctrl;
+    });
+  }
+}
+
+function runCanDeactivateHookStepFactory() {
+  return function runCanDeactivateHook(instruction) {
+    return instruction.router.canDeactivatePorts(instruction);
+  };
+}
+
+function runCanActivateHookStepFactory($injector) {
+
+  function invoke(method, context, instruction) {
+    return $injector.invoke(method, context, {
+      $routeParams: instruction.params
+    });
+  }
+
+  return function runCanActivateHook(instruction) {
+    return instruction.router.traverseInstruction(instruction, function(instruction) {
+      var controller = instruction.controller;
+      return !controller.canActivate || invoke(controller.canActivate, controller, instruction);
+    });
+  }
+}
+
+function loadTemplatesStepFactory($componentLoader, $templateRequest) {
+  return function loadTemplates(instruction) {
+    return instruction.router.traverseInstruction(instruction, function(instruction) {
       var componentTemplateUrl = $componentLoader.template(instruction.component);
-      return $templateRequest(componentTemplateUrl);
+      return $templateRequest(componentTemplateUrl).then(function (templateHtml) {
+        return instruction.template = templateHtml;
+      });
+    });
+  };
+}
+
+
+function activateStepValue(instruction) {
+  return instruction.router.activatePorts(instruction);
+}
+
+
+function pipelineProvider() {
+  var stepConfiguration;
+
+  var protoStepConfiguration = [
+    '$setupRoutersStep',
+    '$initLocalsStep',
+    '$initControllersStep',
+    '$runCanDeactivateHookStep',
+    '$runCanActivateHookStep',
+    '$loadTemplatesStep',
+    '$activateStep'
+  ];
+
+  return {
+    steps: protoStepConfiguration.slice(0),
+    config: function (newConfig) {
+      protoStepConfiguration = newConfig;
+    },
+    $get: function ($injector, $q) {
+      stepConfiguration = protoStepConfiguration.map(function (step) {
+        return $injector.get(step);
+      });
+      return {
+        process: function(instruction) {
+          // make a copy
+          var steps = stepConfiguration.slice(0);
+
+          function processOne(result) {
+            if (steps.length === 0) {
+              return result;
+            }
+            var step = steps.shift();
+            return $q.when(step(instruction)).then(processOne);
+          }
+
+          return processOne();
+        }
+      }
     }
   };
 }
+
 
 /**
  * @name $componentLoaderProvider
@@ -428,6 +551,12 @@ function $componentLoaderProvider() {
     }
   };
 }
+
+// this is a hack as a result of the build system used to transpile
+function privatePipelineFactory($pipeline) {
+  return $pipeline;
+}
+
 
 function dashCase(str) {
   return str.replace(/([A-Z])/g, function ($1) {

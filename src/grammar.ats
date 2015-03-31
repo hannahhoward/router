@@ -15,12 +15,15 @@ export class Grammar {
       name = '/';
     }
     if (!this.rules[name]) {
-      this.rules[name] = new MiniRecognizer(name);
+      this.rules[name] = new CanonicalRecognizer(name);
     }
     this.rules[name].config(config);
   }
 
   recognize(url:string, componentName = '/') {
+    if (typeof url === 'undefined') {
+      return;
+    }
 
     var componentRecognizer = this.rules[componentName];
     if (!componentRecognizer) {
@@ -92,7 +95,7 @@ export class Grammar {
 /*
  * includes redirect rules
  */
-class MiniRecognizer {
+class CanonicalRecognizer {
   constructor(name) {
     this.name = name;
     this.rewrites = {};
