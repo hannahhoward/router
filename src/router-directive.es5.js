@@ -366,17 +366,25 @@ function initLocalsStepFactory() {
 /*
  * $initControllersStep
  */
-function initControllersStepFactory($controller, $componentLoader) {
+function initControllersStepFactory($controller, $componentLoader, $injector) {
   return function initControllers(instruction) {
     return instruction.router.traverseInstruction(instruction, function(instruction) {
       var controllerName = $componentLoader.controllerName(instruction.component);
+      var directiveName = $componentLoader.directiveName(instruction.component);
       var locals = instruction.locals;
       var ctrl;
       try {
         ctrl = $controller(controllerName, locals);
       } catch(e) {
-        console.warn && console.warn('Could not instantiate controller', controllerName);
-        ctrl = $controller(angular.noop, locals);
+        try {
+          var directives = $injector.get(directiveName);
+          // can't handle two names on the same directive yet
+          instruction.directive = directives[0];
+          ctrl = $controller(instruction.directive.controller, locals);
+        } catch(e) {
+          console.warn && console.warn('Could not instantiate controller', controllerName);
+          ctrl = $controller(angular.noop, locals);
+        }
       }
       return instruction.controller = ctrl;
     });
@@ -408,7 +416,16 @@ function runCanActivateHookStepFactory($injector) {
 function loadTemplatesStepFactory($componentLoader, $templateRequest) {
   return function loadTemplates(instruction) {
     return instruction.router.traverseInstruction(instruction, function(instruction) {
-      var componentTemplateUrl = $componentLoader.template(instruction.component);
+      var componentTemplateUrl;
+      if (instruction.directive) {
+        if (instruction.directive.template) {
+          return instruction.template = instruction.directive.template
+        } else {
+          componentTemplateUrl = instruction.directive.templateUrl;
+        }
+      } else {
+        componentTemplateUrl = $componentLoader.template(instruction.component);
+      }
       return $templateRequest(componentTemplateUrl).then(function (templateHtml) {
         return instruction.template = templateHtml;
       });

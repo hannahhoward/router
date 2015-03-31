@@ -29,12 +29,16 @@ function provideHelpers(fn, preInject) {
         $rootScope,
         $router,
         $templateCache,
-        $controllerProvider;
+        $controllerProvider,
+        $compileProvider;
 
     module('ng');
     module('ngNewRouter');
     module(function(_$controllerProvider_) {
       $controllerProvider = _$controllerProvider_;
+    });
+    module(function(_$compileProvider_) {
+      $compileProvider = _$compileProvider_;
     });
 
     inject(function(_$compile_, _$rootScope_, _$router_, _$templateCache_) {
@@ -64,6 +68,29 @@ function provideHelpers(fn, preInject) {
       put(name, template);
     }
 
+    function registerDirectiveComponent(name, template, config) {
+      var ddo = {};
+      if (!template) {
+        template = '';
+      }
+      ddo.template = template;
+      var ctrl;
+      if (!config) {
+        ctrl = function () {};
+      } else if (angular.isArray(config)) {
+        ctrl = function () {};
+        ctrl.$routeConfig = config;
+      } else if (typeof config === 'function') {
+        ctrl = config;
+      } else {
+        ctrl = function () {};
+        ctrl.prototype = config;
+      }
+      ddo.controller = ctrl;
+      $compileProvider.directive(name, function() {
+        return ddo;
+      });
+    }
 
     function put (name, template) {
       $templateCache.put(componentTemplatePath(name), [200, template, {}]);
@@ -77,6 +104,7 @@ function provideHelpers(fn, preInject) {
 
     fn({
       registerComponent: registerComponent,
+      registerDirectiveComponent: registerDirectiveComponent,
       $router: $router,
       put: put,
       compile: compile

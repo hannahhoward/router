@@ -7,7 +7,8 @@ describe('ngViewport', function () {
       $rootScope,
       $router,
       $templateCache,
-      $controllerProvider;
+      $controllerProvider,
+      $compileProvider;
 
 
   beforeEach(function() {
@@ -17,6 +18,9 @@ describe('ngViewport', function () {
       $controllerProvider = _$controllerProvider_;
     });
 
+    module(function(_$compileProvider_) {
+      $compileProvider = _$compileProvider_;
+    });
     inject(function(_$compile_, _$rootScope_, _$router_, _$templateCache_) {
       $compile = _$compile_;
       $rootScope = _$rootScope_;
@@ -29,6 +33,7 @@ describe('ngViewport', function () {
     });
     registerComponent('one', '<div>{{one.number}}</div>', boringController('number', 'one'));
     registerComponent('two', '<div>{{two.number}}</div>', boringController('number', 'two'));
+    registerDirectiveComponent('three', '<div>{{three.number}}</div>', boringController('number', 'three'));
   });
 
 
@@ -45,6 +50,18 @@ describe('ngViewport', function () {
     expect(elt.text()).toBe('one');
   });
 
+  it('should work in a simple case using a directive', function () {
+    compile('<ng-viewport></ng-viewport>');
+
+    $router.config([
+      { path: '/', component: 'three' }
+    ]);
+
+    $router.navigate('/');
+    $rootScope.$digest();
+
+    expect(elt.text()).toBe('three');
+  });
 
   // See https://github.com/angular/router/issues/105
   it('should warn when instantiating a component with no controller', function () {
@@ -668,6 +685,30 @@ describe('ngViewport', function () {
     put(name, template);
   }
 
+  function registerDirectiveComponent(name, template, config) {
+    var ddo = {};
+    if (!template) {
+      template = '';
+    }
+    ddo.template = template;
+    var ctrl;
+    if (!config) {
+      ctrl = function () {};
+    } else if (angular.isArray(config)) {
+      ctrl = function () {};
+      ctrl.$routeConfig = config;
+    } else if (typeof config === 'function') {
+      ctrl = config;
+    } else {
+      ctrl = function () {};
+      ctrl.prototype = config;
+    }
+    ddo.controller = ctrl;
+    $compileProvider.directive(name, function() {
+      return ddo;
+    });
+  }
+
   function boringController (model, value) {
     return function () {
       this[model] = value;
@@ -764,4 +805,5 @@ describe('ngViewport animations', function () {
     $rootScope.$digest();
     return elt;
   }
+
 });

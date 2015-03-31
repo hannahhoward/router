@@ -80,7 +80,9 @@ define(["assert", 'route-recognizer'], function($__0,$__2) {
       return path;
     }
   }, {});
-  Grammar.prototype.recognize.parameters = [[$traceurRuntime.type.string], []];
+  Object.defineProperty(Grammar.prototype.recognize, "parameters", {get: function() {
+      return [[$traceurRuntime.type.string], []];
+    }});
   var CanonicalRecognizer = function CanonicalRecognizer(name) {
     this.name = name;
     this.rewrites = {};
@@ -195,3 +197,5 @@ define(["assert", 'route-recognizer'], function($__0,$__2) {
     __esModule: true
   };
 });
+
+//# sourceMappingURL=grammar.ats
