@@ -653,7 +653,7 @@ describe('ngViewport', function () {
   describe("with directives", function() {
     beforeEach(function() {
       registerDirectiveComponent('three', '<div>{{three.number}}</div>', boringController('number', 'three'));
-      registerDirectiveComponent('otherUser', '<div>hello {{otherUser.name}}</div>', function() {}, { name: "=" });
+      registerDirectiveComponent('otherUser', '<div>hello {{otherUser.myName}}</div>', function() {}, { myName: "=name" });
     });
 
     it('should work in a simple case using a directive', function () {
@@ -724,7 +724,11 @@ describe('ngViewport', function () {
       ctrl.prototype = config;
     }
     ddo.controller = ctrl;
-    ddo.bindToController = bindToController;
+    // using ng 1.3 for now
+    if (bindToController) {
+      ddo.bindToController = true;
+      ddo.scope = bindToController;
+    }
     $compileProvider.directive(name, function() {
       return ddo;
     });

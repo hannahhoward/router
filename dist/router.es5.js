@@ -12,6 +12,7 @@ angular.module('ngNewRouter', [])
   .factory('$setupRoutersStep', setupRoutersStepFactory)
   .factory('$initLocalsStep', initLocalsStepFactory)
   .factory('$initControllersStep', initControllersStepFactory)
+  .factory('$bindRouteParamsForDirectiveStep', bindRouteParamsForDirectiveStepFactory)
   .factory('$runCanDeactivateHookStep', runCanDeactivateHookStepFactory)
   .factory('$runCanActivateHookStep', runCanActivateHookStepFactory)
   .factory('$loadTemplatesStep', loadTemplatesStepFactory)
@@ -436,13 +437,6 @@ function initControllersStepFactory($controller, $componentLoader, $injector) {
           // can't handle two names on the same directive yet
           instruction.directive = directives[0];
           ctrl = $controller(instruction.directive.controller, locals);
-          if (instruction.directive.bindToController) {
-            Object.keys(instruction.directive.bindToController).forEach(function(key) {
-              if (instruction.params[key]) {
-                ctrl[key] = instruction.params[key];
-              }
-            });
-          }
         } catch(e) {
           console.warn && console.warn('Could not instantiate controller', controllerName);
           ctrl = $controller(angular.noop, locals);
@@ -453,6 +447,31 @@ function initControllersStepFactory($controller, $componentLoader, $injector) {
   }
 }
 initControllersStepFactory.$inject = ["$controller", "$componentLoader", "$injector"];
+
+function bindRouteParamsForDirectiveStepFactory() {
+  return function bindRouteParamsForDirective(instruction) {
+    return instruction.router.traverseInstruction(instruction, function(instruction) {
+      if (instruction.directive && instruction.directive.bindToController) {
+        var bindings;
+        if (typeof instruction.directive.bindToController == 'object') {
+          // ng 1.4 object syntax
+          bindings = instruction.directive.$$bindings.bindToController;
+        } else if (instruction.directive.bindToController == true) {
+          // ng 1.3 syntax
+          bindings = instruction.directive.$$isolateBindings;
+        }
+        if (bindings) {
+          Object.keys(bindings).forEach(function(key) {
+            if (instruction.params[bindings[key].attrName]) {
+              instruction.controller[key] = instruction.params[bindings[key].attrName];
+            }
+          });
+        }
+      }
+      return true;
+    });
+  };
+}
 
 function runCanDeactivateHookStepFactory() {
   return function runCanDeactivateHook(instruction) {
@@ -511,6 +530,7 @@ function pipelineProvider() {
     '$setupRoutersStep',
     '$initLocalsStep',
     '$initControllersStep',
+    '$bindRouteParamsForDirectiveStep',
     '$runCanDeactivateHookStep',
     '$runCanActivateHookStep',
     '$loadTemplatesStep',
