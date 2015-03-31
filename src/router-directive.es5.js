@@ -361,6 +361,7 @@ function pipelineFactory($controller, $componentLoader, $templateRequest) {
 function $componentLoaderProvider() {
 
   var DEFAULT_SUFFIX = 'Controller';
+  var DEFAULT_DIRECTIVE_SUFFIX = 'Directive';
 
   var componentToCtrl = function componentToCtrlDefault(name) {
     return name[0].toUpperCase() + name.substr(1) + DEFAULT_SUFFIX;
@@ -375,12 +376,22 @@ function $componentLoaderProvider() {
     return name[0].toLowerCase() + name.substr(1, name.length - DEFAULT_SUFFIX.length - 1);
   };
 
+  var componentToDirective = function componentToDirectiveDefault(name) {
+    return name + DEFAULT_DIRECTIVE_SUFFIX;
+  };
+
+  var directiveToComponent = function directiveToComponent(name) {
+    return name.substr(0, name.length - DEFAULT_DIRECTIVE_SUFFIX.length);
+  };
+
   return {
     $get: function () {
       return {
         controllerName: componentToCtrl,
         template: componentToTemplate,
-        component: ctrlToComponent
+        component: ctrlToComponent,
+        directiveName: componentToDirective,
+        directiveToComponent: directiveToComponent
       };
     },
 
@@ -408,6 +419,11 @@ function $componentLoaderProvider() {
      */
     setTemplateMapping: function(newFn) {
       componentToTemplate = newFn;
+      return this;
+    },
+
+    setDirectiveMapping: function(newFn) {
+      componentToDirective = newFn;
       return this;
     }
   };

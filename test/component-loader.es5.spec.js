@@ -13,4 +13,12 @@ describe('$componentLoader', function () {
   it('should convert a component name to a template URL', inject(function ($componentLoader) {
     expect($componentLoader.template('foo')).toBe('./components/foo/foo.html');
   }));
+
+  it('should convert a component name to a potential directive', inject(function ($componentLoader) {
+    expect($componentLoader.directiveName('foo')).toBe('fooDirective');
+  }));
+
+  it('should convert a directive name to a component name', inject(function ($componentLoader) {
+    expect($componentLoader.directiveToComponent('fooDirective')).toBe('foo');
+  }));
 });

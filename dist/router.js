@@ -134,15 +134,21 @@ define(["assert", './grammar', './pipeline'], function($__0,$__2,$__4) {
       return this.registry.generate(name, params);
     }
   }, {});
-  Router.parameters = [[Grammar], [Pipeline], [], []];
-  Router.prototype.generate.parameters = [[$traceurRuntime.type.string], []];
+  Object.defineProperty(Router, "parameters", {get: function() {
+      return [[Grammar], [Pipeline], [], []];
+    }});
+  Object.defineProperty(Router.prototype.generate, "parameters", {get: function() {
+      return [[$traceurRuntime.type.string], []];
+    }});
   var RootRouter = function RootRouter(grammar, pipeline) {
     assert.argumentTypes(grammar, Grammar, pipeline, Pipeline);
     $traceurRuntime.superCall(this, $RootRouter.prototype, "constructor", [grammar, pipeline, null, '/']);
   };
   var $RootRouter = RootRouter;
   ($traceurRuntime.createClass)(RootRouter, {}, {}, Router);
-  RootRouter.parameters = [[Grammar], [Pipeline]];
+  Object.defineProperty(RootRouter, "parameters", {get: function() {
+      return [[Grammar], [Pipeline]];
+    }});
   var ChildRouter = function ChildRouter(parent, name) {
     $traceurRuntime.superCall(this, $ChildRouter.prototype, "constructor", [parent.registry, parent.pipeline, parent, name]);
     this.parent = parent;
@@ -177,3 +183,5 @@ define(["assert", './grammar', './pipeline'], function($__0,$__2,$__4) {
     __esModule: true
   };
 });
+
+//# sourceMappingURL=router.ats
