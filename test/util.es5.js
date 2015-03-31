@@ -68,7 +68,7 @@ function provideHelpers(fn, preInject) {
       put(name, template);
     }
 
-    function registerDirectiveComponent(name, template, config) {
+    function registerDirectiveComponent(name, template, config, bindToController) {
       var ddo = {};
       if (!template) {
         template = '';
@@ -87,6 +87,7 @@ function provideHelpers(fn, preInject) {
         ctrl.prototype = config;
       }
       ddo.controller = ctrl;
+      ddo.bindToController = bindToController;
       $compileProvider.directive(name, function() {
         return ddo;
       });

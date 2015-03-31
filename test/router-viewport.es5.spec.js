@@ -33,7 +33,6 @@ describe('ngViewport', function () {
     });
     registerComponent('one', '<div>{{one.number}}</div>', boringController('number', 'one'));
     registerComponent('two', '<div>{{two.number}}</div>', boringController('number', 'two'));
-    registerDirectiveComponent('three', '<div>{{three.number}}</div>', boringController('number', 'three'));
   });
 
 
@@ -48,19 +47,6 @@ describe('ngViewport', function () {
     $rootScope.$digest();
 
     expect(elt.text()).toBe('one');
-  });
-
-  it('should work in a simple case using a directive', function () {
-    compile('<ng-viewport></ng-viewport>');
-
-    $router.config([
-      { path: '/', component: 'three' }
-    ]);
-
-    $router.navigate('/');
-    $rootScope.$digest();
-
-    expect(elt.text()).toBe('three');
   });
 
   // See https://github.com/angular/router/issues/105
@@ -664,6 +650,40 @@ describe('ngViewport', function () {
     expect($router.navigating).toBe(false);
   });
 
+  describe("with directives", function() {
+    beforeEach(function() {
+      registerDirectiveComponent('three', '<div>{{three.number}}</div>', boringController('number', 'three'));
+      registerDirectiveComponent('otherUser', '<div>hello {{otherUser.name}}</div>', function() {}, { name: "=" });
+    });
+
+    it('should work in a simple case using a directive', function () {
+      compile('<ng-viewport></ng-viewport>');
+
+      $router.config([
+        { path: '/', component: 'three' }
+      ]);
+
+      $router.navigate('/');
+      $rootScope.$digest();
+
+      expect(elt.text()).toBe('three');
+    });
+
+    it('should bind parameters if bindToController is set', function () {
+      $router.config([
+        { path: '/user/:name', component: 'otherUser' }
+      ]);
+      compile('<ng-viewport></ng-viewport>');
+
+      $router.navigate('/user/brian');
+      $rootScope.$digest();
+      expect(elt.text()).toBe('hello brian');
+
+      $router.navigate('/user/igor');
+      $rootScope.$digest();
+      expect(elt.text()).toBe('hello igor');
+    });
+  });
 
   function registerComponent(name, template, config) {
     if (!template) {
@@ -685,7 +705,7 @@ describe('ngViewport', function () {
     put(name, template);
   }
 
-  function registerDirectiveComponent(name, template, config) {
+  function registerDirectiveComponent(name, template, config, bindToController) {
     var ddo = {};
     if (!template) {
       template = '';
@@ -704,6 +724,7 @@ describe('ngViewport', function () {
       ctrl.prototype = config;
     }
     ddo.controller = ctrl;
+    ddo.bindToController = bindToController;
     $compileProvider.directive(name, function() {
       return ddo;
     });

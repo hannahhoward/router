@@ -381,6 +381,13 @@ function initControllersStepFactory($controller, $componentLoader, $injector) {
           // can't handle two names on the same directive yet
           instruction.directive = directives[0];
           ctrl = $controller(instruction.directive.controller, locals);
+          if (instruction.directive.bindToController) {
+            Object.keys(instruction.directive.bindToController).forEach(function(key) {
+              if (instruction.params[key]) {
+                ctrl[key] = instruction.params[key];
+              }
+            });
+          }
         } catch(e) {
           console.warn && console.warn('Could not instantiate controller', controllerName);
           ctrl = $controller(angular.noop, locals);
