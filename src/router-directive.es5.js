@@ -236,7 +236,11 @@ function ngViewportDirective($animate, $injector, $q, $router) {
         });
 
         var newController = instruction.controller;
-        newScope[componentName] = newController;
+        if (instruction.directive && instruction.directive.controllerAs) {
+          newScope[instruction.directive.controllerAs] = newController;
+        } else {
+          newScope[componentName] = newController;
+        }
 
         var result;
         if (currentController && currentController.deactivate) {

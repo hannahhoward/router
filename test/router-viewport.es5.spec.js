@@ -653,7 +653,14 @@ describe('ngViewport', function () {
   describe("with directives", function() {
     beforeEach(function() {
       registerDirectiveComponent('three', '<div>{{three.number}}</div>', boringController('number', 'three'));
-      registerDirectiveComponent('otherUser', '<div>hello {{otherUser.myName}}</div>', function() {}, { myName: "=name" });
+      registerDirectiveComponent('otherUser', '<div>hello {{otherUser.myName}}</div>', function() {}, {
+        bindToController: true,
+        scope: { myName: "=name" }
+      });
+      registerDirectiveComponent('customControllerAs', '<div>{{cheese.number}}', boringController("number", "three"),
+      {
+        controllerAs: 'cheese'
+      })
     });
 
     it('should work in a simple case using a directive', function () {
@@ -683,6 +690,19 @@ describe('ngViewport', function () {
       $rootScope.$digest();
       expect(elt.text()).toBe('hello igor');
     });
+
+    it("should respect the directives controllerAs attribute", function() {
+      compile('<ng-viewport></ng-viewport>');
+
+      $router.config([
+        { path: '/', component: 'customControllerAs' }
+      ]);
+
+      $router.navigate('/');
+      $rootScope.$digest();
+
+      expect(elt.text()).toBe('three');
+    });
   });
 
   function registerComponent(name, template, config) {
@@ -705,7 +725,7 @@ describe('ngViewport', function () {
     put(name, template);
   }
 
-  function registerDirectiveComponent(name, template, config, bindToController) {
+  function registerDirectiveComponent(name, template, config, ddoOptions) {
     var ddo = {};
     if (!template) {
       template = '';
@@ -725,10 +745,7 @@ describe('ngViewport', function () {
     }
     ddo.controller = ctrl;
     // using ng 1.3 for now
-    if (bindToController) {
-      ddo.bindToController = true;
-      ddo.scope = bindToController;
-    }
+    ddo = angular.extend(ddo, ddoOptions)
     $compileProvider.directive(name, function() {
       return ddo;
     });
