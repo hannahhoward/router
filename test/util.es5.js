@@ -68,7 +68,7 @@ function provideHelpers(fn, preInject) {
       put(name, template);
     }
 
-    function registerDirectiveComponent(name, template, config, bindToController) {
+    function registerDirectiveComponent(name, template, config, ddoOptions) {
       var ddo = {};
       if (!template) {
         template = '';
@@ -87,11 +87,13 @@ function provideHelpers(fn, preInject) {
         ctrl.prototype = config;
       }
       ddo.controller = ctrl;
-      ddo.bindToController = bindToController;
+      // using ng 1.3 for now
+      ddo = angular.extend(ddo, ddoOptions)
       $compileProvider.directive(name, function() {
         return ddo;
       });
     }
+
 
     function put (name, template) {
       $templateCache.put(componentTemplatePath(name), [200, template, {}]);
